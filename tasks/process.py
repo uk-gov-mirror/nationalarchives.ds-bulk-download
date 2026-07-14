@@ -9,7 +9,7 @@ from typing import Optional
 import boto3
 from boto3.s3.transfer import TransferConfig
 from pydantic import BaseModel, TypeAdapter
-from stream_zip import ZIP_32, stream_zip
+from stream_zip import ZIP_64, stream_zip
 from to_file_like_obj import to_file_like_obj
 
 logger = logging.getLogger(__name__)
@@ -251,7 +251,7 @@ class Packager:
                     file["Key"],
                     file["LastModified"],
                     mode,
-                    ZIP_32,
+                    ZIP_64,
                     (infile_content,),
                 )
 
