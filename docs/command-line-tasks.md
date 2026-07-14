@@ -22,6 +22,7 @@ poetry run python tasks/process.py <batch> <packager> <options>
 - `all_weeks_this_month` - create multiple ZIPs, for every week this month
 - `all_months_this_year` - create multiple ZIPs, for every month this year excluding the current month
 - `all_previous_years` - create multiple ZIPs, for every year prior to the current year
+- `all_year_month_week` - create all the year, month and week ZIPs from `all_previous_years`, `all_months_this_year` and `all_weeks_this_month`
 - `all` - create a ZIP of all files
 - `chunked` - create multiple ZIPs, chunked into a set size which can be set by passing a number into the `<options>` parameter of the command
 - `sized` - create multiple ZIPs, chunked into a target file size which can be set by passing a number into the `<options>` parameter of the command (the file size of the chunk in bytes before writing to a ZIP file)

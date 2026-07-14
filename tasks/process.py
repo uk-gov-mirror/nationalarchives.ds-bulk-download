@@ -913,6 +913,8 @@ def main(args: list[str]) -> None:
         SizedPackager.packager_name: SizedPackager,
     }
 
+    all_timed_packagers_name = "all_year_month_week"
+
     if len(args) < 1 or args[0] == "help":
         logger.debug("Usage: python process.py <batch> <packager>")
         logger.debug(f"  Available batches: {', '.join(batches.keys())}")
@@ -923,16 +925,37 @@ def main(args: list[str]) -> None:
         logger.error("Please provide a batch as an argument.")
         logger.debug(f"Available batches: {', '.join(batches.keys())}")
         sys.exit(1)
-    if len(args) < 2 or args[1] not in packagers:
+
+    if len(args) < 2 or (
+        args[1] not in packagers and not args[1] == all_timed_packagers_name
+    ):
         logger.error("Please provide a packager as an argument.")
-        logger.debug(f"Available packagers: {', '.join(packagers.keys())}")
+        logger.debug(
+            f"Available packagers: {', '.join(list(packagers.keys()) + [all_timed_packagers_name])}"
+        )
         sys.exit(1)
+
     extra_args = args[2:]
     logger.debug(f"Extra arguments: {extra_args}")
 
     batch_class = batches[args[0]]
-    batch = batch_class(packager_class=packagers[args[1]], extra_args=extra_args)
-    batch.process()
+    batches = []
+    if args[1] == all_timed_packagers_name:
+        timed_packagers = [
+            AllPreviousYearsPackager,
+            AllMonthsThisYearPackager,
+            AllWeeksThisMonthPackager,
+        ]
+        batches = [
+            batch_class(packager_class=packager_class, extra_args=extra_args)
+            for packager_class in timed_packagers
+        ]
+    else:
+        batches = [
+            batch_class(packager_class=packagers[args[1]], extra_args=extra_args)
+        ]
+    for batch in batches:
+        batch.process()
 
 
 if __name__ == "__main__":
