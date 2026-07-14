@@ -1,14 +1,16 @@
-import io
 import json
 import logging
 import os
 import sys
-import zipfile
 from datetime import datetime, timedelta, timezone
+from stat import S_IFREG
 from typing import Optional
 
 import boto3
+from boto3.s3.transfer import TransferConfig
 from pydantic import BaseModel, TypeAdapter
+from stream_zip import ZIP_32, stream_zip
+from to_file_like_obj import to_file_like_obj
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -73,7 +75,11 @@ class Packager:
     def _get_s3_client(self) -> boto3.client:
         if not self.s3_client:
             s3_endpoint = os.environ.get("S3_ENDPOINT", None)
-            self.s3_client = boto3.client("s3", endpoint_url=s3_endpoint)
+            self.s3_client = boto3.client(
+                "s3",
+                region_name=os.environ.get("AWS_DEFAULT_REGION", "eu-west-2"),
+                endpoint_url=s3_endpoint,
+            )
         return self.s3_client
 
     def _get_all_s3_objects(self, **base_kwargs) -> list[dict]:
@@ -98,11 +104,6 @@ class Packager:
             self._get_all_s3_objects(Bucket=self.source[0], Prefix=self.source[1])
         )
         logger.debug(f"-- Found {len(self.files)} total files in source")
-        # TODO: REMOVE AFTER TESTING
-        # self.files = [
-        #     {**file, "LastModified": file["LastModified"] - timedelta(hours=2**i)}
-        #     for i, file in enumerate(self.files)
-        # ]
         if self.from_datetime and self.to_datetime:
             self.files = [
                 file
@@ -210,24 +211,66 @@ class Packager:
             f"Zipping and uploading chunk: {chunk.manifest_data.name} ({chunk.manifest_data.file})"
         )
         s3_client = self._get_s3_client()
-        with io.BytesIO(initial_bytes=b"") as zip_buffer:
-            with zipfile.ZipFile(
-                zip_buffer, "a", zipfile.ZIP_DEFLATED, False
-            ) as zipper:
-                for file in chunk.files:
-                    logger.debug(
-                        f"-- Adding S3 file to ZIP: {self.source[0]}/{file['Key']}"
-                    )
-                    infile_object = s3_client.get_object(
-                        Bucket=self.source[0], Key=file["Key"]
-                    )
-                    infile_content = infile_object["Body"].read()
-                    zipper.writestr(file["Key"], infile_content)
-            s3_client.put_object(
-                Bucket=self.s3_export_bucket,
-                Key=chunk.manifest_data.file,
-                Body=zip_buffer.getvalue(),
-            )
+
+        # ------------------------------------------
+        # This older method writes files to a zip in
+        # memory, and then uploads the entire zip to
+        # S3 which is not efficient for large files
+        # ------------------------------------------
+        # with io.BytesIO(initial_bytes=b"") as zip_buffer:
+        #     with zipfile.ZipFile(
+        #         zip_buffer, "a", zipfile.ZIP_DEFLATED, False
+        #     ) as zipper:
+        #         for file in chunk.files:
+        #             logger.debug(
+        #                 f"-- Adding S3 file to ZIP: {self.source[0]}/{file['Key']}"
+        #             )
+        #             infile_object = s3_client.get_object(
+        #                 Bucket=self.source[0], Key=file["Key"]
+        #             )
+        #             infile_content = infile_object["Body"].read()
+        #             zipper.writestr(file["Key"], infile_content)
+        #     s3_client.put_object(
+        #         Bucket=self.s3_export_bucket,
+        #         Key=chunk.manifest_data.file,
+        #         Body=zip_buffer.getvalue(),
+        #     )
+
+        def member_files():
+            # modified_at = datetime.now()
+            mode = S_IFREG | 0o600
+            for file in chunk.files:
+                logger.debug(
+                    f"-- Adding S3 file to ZIP: {self.source[0]}/{file['Key']}"
+                )
+                infile_object = s3_client.get_object(
+                    Bucket=self.source[0], Key=file["Key"]
+                )
+                infile_content = infile_object["Body"].read()
+                yield (
+                    file["Key"],
+                    file["LastModified"],
+                    mode,
+                    ZIP_32,
+                    (infile_content,),
+                )
+
+        zipped_chunks = stream_zip(member_files())
+        zipped_chunks_obj = to_file_like_obj(zipped_chunks)
+        # ------------------------------------------
+        # Since we're streaming the final total size
+        # is unknown we have to tell boto3 what part
+        # size to use to accommodate the entire file
+        # and S3 has a hard limit of 10000 parts; in
+        # this example we have a part size of 200MB,
+        # so 2TB maximum final object size
+        # ------------------------------------------
+        s3_client.upload_fileobj(
+            Fileobj=zipped_chunks_obj,
+            Bucket=self.s3_export_bucket,
+            Key=chunk.manifest_data.file,
+            Config=TransferConfig(multipart_chunksize=1024 * 1024 * 200),
+        )
 
     def _generate_manifest_items(self, chunked_files: list[FileBatch]) -> list[dict]:
         return [chunk.manifest_data.model_dump(mode="json") for chunk in chunked_files]

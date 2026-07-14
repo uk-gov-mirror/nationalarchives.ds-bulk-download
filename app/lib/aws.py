@@ -12,7 +12,11 @@ def get_merlin_files_manifest():
     """
 
     s3_endpoint = current_app.config.get("S3_ENDPOINT", None)
-    s3_client = boto3.client("s3", endpoint_url=s3_endpoint)
+    s3_client = boto3.client(
+        "s3",
+        region_name=current_app.config.get("AWS_DEFAULT_REGION"),
+        endpoint_url=s3_endpoint,
+    )
     manifest_name = f"{current_app.config.get('S3_EXPORT_PREFIX_MERLIN')}/{current_app.config.get('S3_MANIFEST_NAME')}"
     content_object = s3_client.get_object(
         Bucket=current_app.config.get("S3_EXPORT_BUCKET"), Key=manifest_name
