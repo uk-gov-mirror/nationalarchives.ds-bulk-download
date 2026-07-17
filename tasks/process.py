@@ -1,7 +1,7 @@
+import argparse
 import json
 import logging
 import os
-import sys
 from datetime import datetime, timedelta, timezone
 from stat import S_IFREG
 from typing import Optional
@@ -68,7 +68,7 @@ class Packager:
         self.s3_export_bucket = os.environ.get("S3_EXPORT_BUCKET")
         if not self.s3_export_bucket:
             raise ValueError("S3_EXPORT_BUCKET environment variable is not set.")
-        logger.debug(
+        logger.info(
             f"Packager initialized with from_datetime: {self.from_datetime}, to_datetime: {self.to_datetime}"
         )
 
@@ -99,11 +99,11 @@ class Packager:
         if source is None:
             raise ValueError("Source must be provided for scanning.")
         self.source = source
-        logger.debug(f"Scanning source: {self.source}")
+        logger.info(f"Scanning source: {self.source}")
         self.files = list(
             self._get_all_s3_objects(Bucket=self.source[0], Prefix=self.source[1])
         )
-        logger.debug(f"-- Found {len(self.files)} total files in source")
+        logger.info(f"-- Found {len(self.files)} total files in source")
         if self.from_datetime and self.to_datetime:
             self.files = [
                 file
@@ -121,10 +121,10 @@ class Packager:
                 file for file in self.files if file["LastModified"] <= self.to_datetime
             ]
         self.scanned = True
-        logger.debug(f"-- Found {len(self.files)} files after filtering by date range")
+        logger.info(f"-- Found {len(self.files)} files after filtering by date range")
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug("Chunking files")
+        logger.info("Chunking files")
         chunk = FileBatch(
             manifest_data=BatchManifestItem(
                 name="All files",
@@ -187,7 +187,7 @@ class Packager:
         if not self.scanned:
             raise ValueError("No files to process. Try running scan() first.")
         if not self.files:
-            logger.debug("No files to process after scanning. Exiting.")
+            logger.info("No files to process after scanning. Exiting.")
             return
 
         existing_manifest = self._get_existing_manifest(
@@ -195,7 +195,7 @@ class Packager:
         )
 
         chunked_files = self._chunk()
-        logger.debug(f"Processing {len(chunked_files)} chunks of files")
+        logger.info(f"Processing {len(chunked_files)} chunks of files")
         for chunk in chunked_files:
             logger.debug(f"-- Chunk: {chunk.manifest_data}")
             for file in chunk.files:
@@ -207,34 +207,10 @@ class Packager:
         self._post_process(existing_manifest, chunked_files)
 
     def _zip_and_upload(self, chunk: FileBatch) -> None:
-        logger.debug(
+        logger.info(
             f"Zipping and uploading chunk: {chunk.manifest_data.name} ({chunk.manifest_data.file})"
         )
         s3_client = self._get_s3_client()
-
-        # ------------------------------------------
-        # This older method writes files to a zip in
-        # memory, and then uploads the entire zip to
-        # S3 which is not efficient for large files
-        # ------------------------------------------
-        # with io.BytesIO(initial_bytes=b"") as zip_buffer:
-        #     with zipfile.ZipFile(
-        #         zip_buffer, "a", zipfile.ZIP_DEFLATED, False
-        #     ) as zipper:
-        #         for file in chunk.files:
-        #             logger.debug(
-        #                 f"-- Adding S3 file to ZIP: {self.source[0]}/{file['Key']}"
-        #             )
-        #             infile_object = s3_client.get_object(
-        #                 Bucket=self.source[0], Key=file["Key"]
-        #             )
-        #             infile_content = infile_object["Body"].read()
-        #             zipper.writestr(file["Key"], infile_content)
-        #     s3_client.put_object(
-        #         Bucket=self.s3_export_bucket,
-        #         Key=chunk.manifest_data.file,
-        #         Body=zip_buffer.getvalue(),
-        #     )
 
         def member_files():
             # modified_at = datetime.now()
@@ -283,7 +259,7 @@ class Packager:
     def _post_process(
         self, existing_manifest: BatchManifest, chunked_files: list[FileBatch]
     ) -> None:
-        logger.debug("Post-processing tasks")
+        logger.info("Post-processing tasks")
         if existing_manifest.packager_group == self.packager_group:
             items_to_remove = self._manifest_items_to_remove(existing_manifest.items)
             item_names_to_remove = [item.name for item in items_to_remove]
@@ -307,7 +283,7 @@ class Packager:
         self._save_manifest(new_manifest)
 
     def _save_manifest(self, manifest_content: dict) -> None:
-        logger.debug(f"Save manifest: {self.export_prefix}/{self.manifest_name}")
+        logger.info(f"Save manifest: {self.export_prefix}/{self.manifest_name}")
         manifest_json = json.dumps(manifest_content, indent=4)
         logger.debug(manifest_json)
         s3_client = self._get_s3_client()
@@ -348,7 +324,7 @@ class ThisWeekPackager(Packager):
         )
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug("Chunking files")
+        logger.info("Chunking files")
         chunk = FileBatch(
             manifest_data=BatchManifestItem(
                 name=self.name,
@@ -400,7 +376,7 @@ class AllWeeksThisMonthPackager(Packager):
         super().__init__(from_datetime=from_datetime, to_datetime=to_datetime)
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug("Chunking files")
+        logger.info("Chunking files")
         today_datetime = datetime.now(timezone.utc)
         mondays_this_month = [
             (today_datetime.replace(day=1) + timedelta(days=i)).date()
@@ -484,7 +460,7 @@ class LastMonthPackager(Packager):
         )
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug("Chunking files")
+        logger.info("Chunking files")
         chunk = FileBatch(
             manifest_data=BatchManifestItem(
                 name=self.name,
@@ -533,7 +509,7 @@ class ThisMonthPackager(Packager):
         )
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug("Chunking files")
+        logger.info("Chunking files")
         chunk = FileBatch(
             manifest_data=BatchManifestItem(
                 name=self.name,
@@ -576,7 +552,7 @@ class AllMonthsThisYearPackager(Packager):
         super().__init__(from_datetime=from_datetime, to_datetime=to_datetime)
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug("Chunking files")
+        logger.info("Chunking files")
         chunks = []
         today_datetime = datetime.now(timezone.utc)
         for month in range(1, today_datetime.month):
@@ -645,7 +621,7 @@ class LastYearPackager(Packager):
         )
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug("Chunking files")
+        logger.info("Chunking files")
         chunk = FileBatch(
             manifest_data=BatchManifestItem(
                 name=self.name,
@@ -694,7 +670,7 @@ class ThisYearPackager(Packager):
         )
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug("Chunking files")
+        logger.info("Chunking files")
         chunk = FileBatch(
             manifest_data=BatchManifestItem(
                 name=self.name,
@@ -732,7 +708,7 @@ class AllPreviousYearsPackager(Packager):
         super().__init__(to_datetime=to_datetime)
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug("Chunking files")
+        logger.info("Chunking files")
         chunks = []
         this_year = datetime.now(timezone.utc).year
         years = set(file["LastModified"].year for file in self.files)
@@ -740,7 +716,7 @@ class AllPreviousYearsPackager(Packager):
         for year in sorted(years, reverse=True):
             if year >= this_year:
                 continue
-            print(f"Processing year: {year}")
+            logger.debug(f"Processing year: {year}")
             year_start = datetime(year, 1, 1, 0, 0, 0, 0, tzinfo=timezone.utc)
             year_end = datetime(year, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
             files = [
@@ -791,7 +767,7 @@ class ChunkedPackager(AllPackager):
         super().__init__()
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug(f"Chunking files into chunks of {self.chunk_size} files")
+        logger.info(f"Chunking files into chunks of {self.chunk_size} files")
         file_chunks = [
             self.files[i : i + self.chunk_size]
             for i in range(0, len(self.files), self.chunk_size)
@@ -824,7 +800,7 @@ class SizedPackager(AllPackager):
         super().__init__()
 
     def _chunk(self) -> list[FileBatch]:
-        logger.debug(f"Chunking files into chunks of file size {self.chunk_size} bytes")
+        logger.info(f"Chunking files into chunks of file size {self.chunk_size} bytes")
         file_chunks = []
         current_chunk = []
         current_sum = 0
@@ -895,71 +871,64 @@ class MerlinBatch(Batch):
     prefix = os.environ.get("S3_EXPORT_PREFIX_MERLIN", "merlin")
 
 
-def main(args: list[str]) -> None:
-    batches = {
-        "merlin": MerlinBatch,
-    }
-    packagers = {
-        ThisWeekPackager.packager_name: ThisWeekPackager,
-        ThisMonthPackager.packager_name: ThisMonthPackager,
-        ThisYearPackager.packager_name: ThisYearPackager,
-        LastMonthPackager.packager_name: LastMonthPackager,
-        LastYearPackager.packager_name: LastYearPackager,
-        AllWeeksThisMonthPackager.packager_name: AllWeeksThisMonthPackager,
-        AllMonthsThisYearPackager.packager_name: AllMonthsThisYearPackager,
-        AllPreviousYearsPackager.packager_name: AllPreviousYearsPackager,
-        AllPackager.packager_name: AllPackager,
-        ChunkedPackager.packager_name: ChunkedPackager,
-        SizedPackager.packager_name: SizedPackager,
-    }
+batches = {
+    "merlin": MerlinBatch,
+}
+packagers = {
+    ThisWeekPackager.packager_name: ThisWeekPackager,
+    ThisMonthPackager.packager_name: ThisMonthPackager,
+    ThisYearPackager.packager_name: ThisYearPackager,
+    LastMonthPackager.packager_name: LastMonthPackager,
+    LastYearPackager.packager_name: LastYearPackager,
+    AllWeeksThisMonthPackager.packager_name: AllWeeksThisMonthPackager,
+    AllMonthsThisYearPackager.packager_name: AllMonthsThisYearPackager,
+    AllPreviousYearsPackager.packager_name: AllPreviousYearsPackager,
+    AllPackager.packager_name: AllPackager,
+    ChunkedPackager.packager_name: ChunkedPackager,
+    SizedPackager.packager_name: SizedPackager,
+}
+all_timed_packagers_name = "all_year_month_week"
 
-    all_timed_packagers_name = "all_year_month_week"
 
-    if len(args) < 1 or args[0] == "help":
-        logger.debug("Usage: python process.py <batch> <packager>")
-        logger.debug(f"  Available batches: {', '.join(batches.keys())}")
-        logger.debug(f"  Available packagers: {', '.join(packagers.keys())}")
-        return
-
-    if len(args) < 1 or args[0] not in batches:
-        logger.error("Please provide a batch as an argument.")
-        logger.debug(f"Available batches: {', '.join(batches.keys())}")
-        sys.exit(1)
-
-    if len(args) < 2 or (
-        args[1] not in packagers and not args[1] == all_timed_packagers_name
-    ):
-        logger.error("Please provide a packager as an argument.")
-        logger.debug(
-            f"Available packagers: {', '.join(list(packagers.keys()) + [all_timed_packagers_name])}"
-        )
-        sys.exit(1)
-
-    extra_args = args[2:]
-    logger.debug(f"Extra arguments: {extra_args}")
-
-    batch_class = batches[args[0]]
-    batches = []
-    if args[1] == all_timed_packagers_name:
+def main(batch, packager, extra_args) -> None:
+    logger.info(
+        f"Processing batch: {batch} with packager: {packager} and extra_args: {extra_args}"
+    )
+    batch_class = batches[batch]
+    batches_to_process = []
+    if packager == all_timed_packagers_name:
         timed_packagers = [
             AllPreviousYearsPackager,
             AllMonthsThisYearPackager,
             AllWeeksThisMonthPackager,
         ]
-        batches = [
+        batches_to_process = [
             batch_class(packager_class=packager_class, extra_args=extra_args)
             for packager_class in timed_packagers
         ]
     else:
-        batches = [
-            batch_class(packager_class=packagers[args[1]], extra_args=extra_args)
+        batches_to_process = [
+            batch_class(packager_class=packagers[packager], extra_args=extra_args)
         ]
-    for batch in batches:
-        batch.process()
+    for batch_to_process in batches_to_process:
+        batch_to_process.process()
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "batch", help="The batch to process", choices=list(batches.keys())
+    )
+    parser.add_argument(
+        "packager",
+        help="The packager to use",
+        choices=list(packagers.keys()) + [all_timed_packagers_name],
+    )
+    parser.add_argument(
+        "options", nargs="*", help="Additional options for the packager"
+    )
+    args = parser.parse_args()
+    main(args.batch, args.packager, args.options)
 
 
 def lambda_handler(event, context):
@@ -972,4 +941,4 @@ def lambda_handler(event, context):
     options = event.get("Options", [])
     if not isinstance(options, list):
         raise ValueError("'Options' must be a list if provided.")
-    main([batch, packager] + options)
+    main(batch, packager, options)
