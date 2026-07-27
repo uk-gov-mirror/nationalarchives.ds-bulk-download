@@ -25,6 +25,7 @@
         <p>In view of the size of the collection and ongoing public interest in these records, The National Archives has put in place a bulk access service. All records that are available to be viewed through Discovery can also be accessed and downloaded from this page.</p>
         <p>The content will be updated as records are transferred to The National Archives and published on Discovery. Any content that has been redacted on the version that is available through Discovery will also be redacted on the version available through this bulk access service.</p>
 
+        <h2 class="tna-heading-l">Downloads</h2>
         {%- set files = [] %}
         {%- for item in manifest['items'] | sort(attribute='created_timestamp,name') | sort(attribute='from_datetime', reverse=True) %}
           {%- set description = 'Updated: ' ~ (item.created_timestamp | pretty_datetime) %}
@@ -42,12 +43,28 @@
             'icon': 'zipper'
           }) %}
         {%- endfor %}
-
         {{ tnaFilesList({
           'itemHeadingLevel': 3,
           'items': files,
           'fullAreaClick': True
         }) }}
+
+        {%- if app_config['MERLIN_FILENAME_REPORT_URL'] %}
+          {{ tnaFilesList({
+            'itemHeadingLevel': 3,
+            'items': [
+              {
+                'id': 'files-manifest',
+                'text': 'Files manifest',
+                'href': app_config['MERLIN_FILENAME_REPORT_URL'],
+                'fileType': 'CSV',
+                'icon': 'csv',
+                'description': 'A CSV file containing a list of all files available in the Merlin record downloads, including their original names.'
+              }
+            ],
+            'fullAreaClick': True
+          }) }}
+        {%- endif %}
       </div>
     </div>
   </div>

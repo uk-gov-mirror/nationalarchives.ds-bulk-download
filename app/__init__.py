@@ -53,6 +53,7 @@ def create_app(config_class):
                 "COOKIE_PREFERENCES_URL": app.config["COOKIE_PREFERENCES_URL"],
                 "GA4_ID": app.config["GA4_ID"],
                 "S3_EXPORT_BUCKET_HOST_URL": app.config["S3_EXPORT_BUCKET_HOST_URL"],
+                "MERLIN_FILENAME_REPORT_URL": app.config["MERLIN_FILENAME_REPORT_URL"],
             },
             feature={},
             pretty_date_range=pretty_date_range,

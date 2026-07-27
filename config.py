@@ -64,6 +64,7 @@ class Production(Features):
     S3_EXPORT_BUCKET_HOST_URL: str = os.environ.get(
         "S3_EXPORT_BUCKET_HOST_URL", "https://download.nationalarchives.gov.uk"
     ).rstrip("/")
+    MERLIN_FILENAME_REPORT_URL: str = os.environ.get("MERLIN_FILENAME_REPORT_URL", "")
 
 
 class Staging(Production):
