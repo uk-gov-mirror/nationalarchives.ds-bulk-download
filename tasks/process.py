@@ -316,7 +316,7 @@ class ThisWeekPackager(Packager):
         if today_datetime.replace(day=1).weekday() != 0:
             self.week_index += 1
         export_filename = f"{today_datetime.strftime('%Y-%m')}-w{self.week_index}.zip"
-        self.name = f"{today_datetime.strftime('%B %Y')}, week {self.week_index}"
+        self.name = f"{from_datetime.strftime('%d')} to {to_datetime.strftime('%d %B %Y')} (week {self.week_index})"
         super().__init__(
             export_filename=export_filename,
             from_datetime=from_datetime,
@@ -403,7 +403,7 @@ class AllWeeksThisMonthPackager(Packager):
                 continue
             chunk = FileBatch(
                 manifest_data=BatchManifestItem(
-                    name=f"{today_datetime.strftime('%B %Y')}, week {week_index}",
+                    name=f"{week_start.strftime('%d')} to {week_end.strftime('%d %B %Y')} (week {week_index})",
                     file=f"{self.export_prefix}/{today_datetime.strftime('%Y-%m')}-w{week_index}.zip"
                     if self.export_prefix
                     else f"{today_datetime.strftime('%Y-%m')}-w{week_index}.zip",
