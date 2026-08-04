@@ -308,15 +308,15 @@ class ThisWeekPackager(Packager):
             today_datetime + timedelta(days=6 - today_datetime.weekday())
         ).replace(hour=23, minute=59, second=59, microsecond=999999)
         mondays_this_month = [
-            (today_datetime.replace(day=1) + timedelta(days=i)).date()
-            for i in range(today_datetime.day)
-            if (today_datetime.replace(day=1) + timedelta(days=i)).weekday() == 0
+            (from_datetime.replace(day=1) + timedelta(days=i)).date()
+            for i in range(from_datetime.day)
+            if (from_datetime.replace(day=1) + timedelta(days=i)).weekday() == 0
         ]
         self.week_index = len(mondays_this_month)
-        if today_datetime.replace(day=1).weekday() != 0:
+        if from_datetime.replace(day=1).weekday() != 0:
             self.week_index += 1
-        export_filename = f"{today_datetime.strftime('%Y-%m')}-w{self.week_index}.zip"
-        self.name = f"{from_datetime.strftime('%d')} to {to_datetime.strftime('%d %B %Y')} (week {self.week_index})"
+        export_filename = f"{from_datetime.strftime('%Y-%m')}-w{self.week_index}.zip"
+        self.name = f"{from_datetime.strftime('%B %Y')} (week {self.week_index})"
         super().__init__(
             export_filename=export_filename,
             from_datetime=from_datetime,
@@ -403,7 +403,7 @@ class AllWeeksThisMonthPackager(Packager):
                 continue
             chunk = FileBatch(
                 manifest_data=BatchManifestItem(
-                    name=f"{week_start.strftime('%d')} to {week_end.strftime('%d %B %Y')} (week {week_index})",
+                    name=f"{week_start.strftime('%B %Y')} (week {week_index})",
                     file=f"{self.export_prefix}/{today_datetime.strftime('%Y-%m')}-w{week_index}.zip"
                     if self.export_prefix
                     else f"{today_datetime.strftime('%Y-%m')}-w{week_index}.zip",
@@ -444,7 +444,7 @@ class LastMonthPackager(Packager):
         to_datetime = datetime(
             last_month.year,
             last_month.month,
-            (today_datetime.replace(day=1) - timedelta(days=1)).day,
+            last_month.day,
             23,
             59,
             59,
@@ -483,8 +483,8 @@ class LastMonthPackager(Packager):
         return [
             item
             for item in existing_manifest_items
-            if item.from_datetime == self.from_datetime
-            and item.to_datetime == self.to_datetime
+            if item.from_datetime >= self.from_datetime
+            and item.to_datetime <= self.to_datetime
         ]
 
 
@@ -644,8 +644,8 @@ class LastYearPackager(Packager):
         return [
             item
             for item in existing_manifest_items
-            if item.from_datetime == self.from_datetime
-            and item.to_datetime == self.to_datetime
+            if item.from_datetime >= self.from_datetime
+            and item.to_datetime <= self.to_datetime
         ]
 
 
