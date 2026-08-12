@@ -12,7 +12,9 @@ from app.lib.template_filters import slugify
 
 
 def create_app(config_class):
-    app = Flask(__name__, static_url_path="/bulk-download/static")
+    app_url_path = "/bulk-download"
+
+    app = Flask(__name__, static_url_path=f"{app_url_path}/static")
     app.config.from_object(config_class)
 
     gunicorn_error_logger = logging.getLogger("gunicorn.error")
@@ -66,8 +68,10 @@ def create_app(config_class):
 
     from .healthcheck import bp as healthcheck_bp
     from .main import bp as site_bp
+    from .sitemap import bp as sitemap_bp
 
     app.register_blueprint(healthcheck_bp, url_prefix="/healthcheck")
+    app.register_blueprint(sitemap_bp, url_prefix=app_url_path)
     app.register_blueprint(site_bp)
 
     return app
